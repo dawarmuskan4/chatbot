@@ -116,6 +116,11 @@ def load_text_document_node(state: GraphState) -> dict:
         doc = Document(file_path)
         text = "\n".join(para.text for para in doc.paragraphs)
     
+    elif extension == "json":
+        import json
+        with open(file_path, "r") as f:
+            data = json.load(f)
+        text = json.dumps(data, indent=2)
     else:
         text = ""
     

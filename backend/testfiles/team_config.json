@@ -1,0 +1,42 @@
+{
+  "team": "Platform Engineering",
+  "quarter": "Q2 2026",
+  "members": [
+    {
+      "name": "Aditi Sharma",
+      "role": "Backend Lead",
+      "years_experience": 5,
+      "skills": ["Python", "PostgreSQL", "Kubernetes"],
+      "on_call": true
+    },
+    {
+      "name": "Rohan Mehta",
+      "role": "Frontend Engineer",
+      "years_experience": 3,
+      "skills": ["React", "TypeScript"],
+      "on_call": false
+    },
+    {
+      "name": "Sneha Kapoor",
+      "role": "DevOps Engineer",
+      "years_experience": 4,
+      "skills": ["AWS", "Terraform", "Docker"],
+      "on_call": true
+    }
+  ],
+  "current_sprint": {
+    "sprint_number": 14,
+    "goal": "Reduce API p95 latency below 200ms",
+    "status": "in_progress",
+    "blockers": [
+      "Database connection pool exhaustion under load",
+      "Missing staging environment parity with production"
+    ]
+  },
+  "budget": {
+    "currency": "INR",
+    "quarterly_cloud_spend": 620000,
+    "headcount_budget": 6,
+    "current_headcount": 3
+  }
+}
