@@ -153,10 +153,14 @@ def route_by_file_type(state: GraphState) -> str:
 def text_qa_node(state: GraphState) -> dict:
     system_prompt = "You are a helpful assistant. Answer the user's question using only the information in the provided document text. If the answer isn't in the text, say so."
     
-    relevant_chunks = retrieve_relevant_chunks(state["user_query"], doc_id=state['document_path'],n_results=2)
+    relevant_chunks = retrieve_relevant_chunks(state["user_query"], doc_id=state["document_path"], n_results=2)
     context_text = "\n\n".join(relevant_chunks) 
 
-    user_content = f"Document text:\n{context_text}\n\nQuestion: {state['user_query']}"
+    history = state["conversation_history"]
+    
+    history_text = "\n".join(f"{msg['role']}: {msg['content']}" for msg in history)
+    
+    user_content = f"Conversation so far:\n{history_text}\n\nDocument text:\n{context_text}\n\nQuestion: {state['user_query']}"
     
     answer = ask_llm(user_content, system_prompt)
     
