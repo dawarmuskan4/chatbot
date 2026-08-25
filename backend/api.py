@@ -1,3 +1,4 @@
+from memory_utils import add_message_to_history, get_conversation_history
 from fastapi import FastAPI, UploadFile, Form
 from typing import Optional
 import shutil
@@ -20,6 +21,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @app.post("/ask-llm")
 def query_endpoint(
     user_query: str = Form(...),
+    session_id: str = Form(...),
     file: Optional[UploadFile] = None
 ):
     has_document = file is not None
@@ -29,6 +31,8 @@ def query_endpoint(
         document_path = os.path.join(UPLOAD_DIR, file.filename)
         with open(document_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
+    
+    history = get_conversation_history(session_id)
     
     initial_state = {
         "user_query": user_query,
@@ -46,4 +50,8 @@ def query_endpoint(
     }
     
     result = graph.invoke(initial_state)
+    
+    add_message_to_history(session_id, "user", user_query)
+    add_message_to_history(session_id, "assistant", result["final_answer"])
+    
     return {"answer": result["final_answer"]}

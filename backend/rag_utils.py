@@ -1,3 +1,4 @@
+from groq import __name
 from sentence_transformers import SentenceTransformer
 import chromadb
 
@@ -18,10 +19,6 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 def embed_chunks(chunks: list[str]):
     embeddings = model.encode(chunks, show_progress_bar=True)
     return embeddings
-
-test_chunks = ["The cat sat on the mat.", "Stock prices rose sharply today."]
-result = embed_chunks(test_chunks)
-print(len(result), len(result[0]))
 
 ## VectorDB
 client = chromadb.Client()

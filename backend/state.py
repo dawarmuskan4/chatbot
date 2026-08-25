@@ -16,4 +16,6 @@ class GraphState(TypedDict):
     previous_error: Optional[str]
     validation_result: Optional[str]
     retry_count: int
+    session_id: Optional[str]
+    conversation_history: Optional[list]
     

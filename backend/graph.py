@@ -17,7 +17,13 @@ from nodes import (
 from llm_client import ask_llm
 
 def direct_answer_node(state: GraphState) -> dict:
-    answer = ask_llm(state["user_query"])
+    history = state["conversation_history"]
+    
+    history_text = "\n".join(f"{msg['role']}: {msg['content']}" for msg in history)
+    
+    user_content = f"Conversation so far:\n{history_text}\n\nNew question: {state['user_query']}"
+    
+    answer = ask_llm(user_content)
     return {"final_answer": answer}
 
 def route_after_intent(state: GraphState) -> str:
