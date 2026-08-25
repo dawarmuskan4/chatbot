@@ -14,6 +14,15 @@ const SUGGESTIONS = [
   { label: "Explain This", icon: "✦" },
 ];
 
+// Generate one session ID per browser tab load, kept for the whole session.
+function getOrCreateSessionId(): string {
+  const existing = sessionStorage.getItem("chat_session_id");
+  if (existing) return existing;
+  const newId = crypto.randomUUID();
+  sessionStorage.setItem("chat_session_id", newId);
+  return newId;
+}
+
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -21,10 +30,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sessionIdRef = useRef<string>(getOrCreateSessionId());
 
-  // Global reset — makes the gradient fill the ENTIRE browser viewport,
-  // overriding Vite's default index.css (which sets a dark body background
-  // in dark-mode browsers) and default html/body margins.
   useEffect(() => {
     const style = document.createElement("style");
     style.textContent = `
@@ -53,6 +60,7 @@ export default function App() {
 
     const formData = new FormData();
     formData.append("user_query", queryText);
+    formData.append("session_id", sessionIdRef.current);
     if (file) formData.append("file", file);
 
     try {
