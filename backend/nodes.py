@@ -6,6 +6,7 @@ from llm_client import ask_llm
 from file_utils import get_file_type
 from pypdf import PdfReader
 from docx import Document
+from rag_utils import chunk_text, embed_chunks, store_chunks, retrieve_relevant_chunks
 
 def classify_intent_node(state: GraphState) -> dict:
     system_prompt = """ 
@@ -124,6 +125,11 @@ def load_text_document_node(state: GraphState) -> dict:
     else:
         text = ""
     
+     # NEW: chunk, embed, store
+    chunks = chunk_text(text)
+    embeddings = embed_chunks(chunks)
+    store_chunks(chunks, embeddings, doc_id=state["document_path"])
+    
     return {"schema_context": text}
 
 def load_document_node(state: GraphState) -> dict:
@@ -147,7 +153,10 @@ def route_by_file_type(state: GraphState) -> str:
 def text_qa_node(state: GraphState) -> dict:
     system_prompt = "You are a helpful assistant. Answer the user's question using only the information in the provided document text. If the answer isn't in the text, say so."
     
-    user_content = f"Document text:\n{state['schema_context']}\n\nQuestion: {state['user_query']}"
+    relevant_chunks = retrieve_relevant_chunks(state["user_query"], doc_id=state['document_path'],n_results=2)
+    context_text = "\n\n".join(relevant_chunks) 
+
+    user_content = f"Document text:\n{context_text}\n\nQuestion: {state['user_query']}"
     
     answer = ask_llm(user_content, system_prompt)
     

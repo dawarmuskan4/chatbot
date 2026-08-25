@@ -29,18 +29,21 @@ collection = client.get_or_create_collection("documents")
 
 def store_chunks(chunks: list[str], embeddings, doc_id: str):
     ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
+    metadatas = [{"doc_id": doc_id} for _ in chunks]
     collection.add(
         ids=ids,
         embeddings=embeddings,   
-        documents=chunks,    
+        documents=chunks,  
+        metadatas=metadatas  
     )
 
-def retrieve_relevant_chunks(query: str, n_results: int = 2) -> list[str]:
+def retrieve_relevant_chunks(query: str, doc_id:str, n_results: int = 2) -> list[str]:
     query_embedding = embed_chunks([query])
     
     results = collection.query(
         query_embeddings=query_embedding,
-        n_results=n_results
+        n_results=n_results,
+        where={"doc_id": doc_id}
     )
     
     return results["documents"][0]
