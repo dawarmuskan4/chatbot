@@ -5,6 +5,7 @@ import shutil
 import os
 from graph import graph
 from fastapi.middleware.cors import CORSMiddleware
+from db_utils import save_message, init_db
 
 app = FastAPI()
 
@@ -17,6 +18,8 @@ app.add_middleware(
 
 UPLOAD_DIR = "uploaded_files"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+init_db()
 
 @app.post("/ask-llm")
 def query_endpoint(
@@ -38,6 +41,8 @@ def query_endpoint(
         "user_query": user_query,
         "has_document": has_document,
         "document_path": document_path,
+        "session_id": session_id,
+        "conversation_history": history,
         "intent": None,
         "df": None,
         "schema_context": None,
@@ -51,7 +56,12 @@ def query_endpoint(
     
     result = graph.invoke(initial_state)
     
+    ## saving to redis
     add_message_to_history(session_id, "user", user_query)
     add_message_to_history(session_id, "assistant", result["final_answer"])
+    
+    ## saving to db
+    save_message(session_id, "user", user_query)
+    save_message(session_id, "assistant", result["final_answer"])
     
     return {"answer": result["final_answer"]}
