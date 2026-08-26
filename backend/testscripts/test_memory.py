@@ -21,7 +21,7 @@ def ask(query):
         "execution_result": None,
         "final_answer": None,
     }
-    from memory_utils import get_conversation_history, add_message_to_history
+    from utils.memory_utils import get_conversation_history, add_message_to_history
     initial_state["conversation_history"] = get_conversation_history(session_id)
     result = graph.invoke(initial_state)
     add_message_to_history(session_id, "user", query)

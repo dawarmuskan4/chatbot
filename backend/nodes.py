@@ -3,10 +3,10 @@
 import pandas as pd
 from state import GraphState
 from llm_client import ask_llm
-from file_utils import get_file_type
+from utils.file_utils import get_file_type
 from pypdf import PdfReader
 from docx import Document
-from rag_utils import chunk_text, embed_chunks, store_chunks, retrieve_relevant_chunks
+from utils.rag_utils import chunk_text, embed_chunks, store_chunks, retrieve_relevant_chunks
 
 def classify_intent_node(state: GraphState) -> dict:
     system_prompt = """ 

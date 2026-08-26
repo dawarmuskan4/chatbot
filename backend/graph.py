@@ -1,7 +1,7 @@
 # graph.py
 from langgraph.graph import StateGraph, END
 from state import GraphState
-from file_utils import get_file_type
+from utils.file_utils import get_file_type
 from nodes import (
     classify_intent_node,
     generate_pandas_code_node,
