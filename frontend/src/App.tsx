@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from "react";
+import AuthScreen from "./AuthScreen";
+import { clearSession, getToken, getUsername, setSession } from "./auth";
 
 interface Message {
   role: "user" | "assistant";
@@ -14,7 +16,6 @@ const SUGGESTIONS = [
   { label: "Explain This", icon: "✦" },
 ];
 
-// Generate one session ID per browser tab load, kept for the whole session.
 function getOrCreateSessionId(): string {
   const existing = sessionStorage.getItem("chat_session_id");
   if (existing) return existing;
@@ -24,6 +25,9 @@ function getOrCreateSessionId(): string {
 }
 
 export default function App() {
+  const [token, setToken] = useState<string | null>(getToken());
+  const [username, setUsername] = useState<string | null>(getUsername());
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -51,9 +55,22 @@ export default function App() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
+  function handleAuthenticated(newToken: string, newUsername: string) {
+    setSession(newToken, newUsername);
+    setToken(newToken);
+    setUsername(newUsername);
+  }
+
+  function handleLogout() {
+    clearSession();
+    setToken(null);
+    setUsername(null);
+    setMessages([]);
+  }
+
   async function sendQuery(overrideText?: string) {
     const queryText = overrideText ?? input;
-    if (!queryText.trim() || loading) return;
+    if (!queryText.trim() || loading || !token) return;
 
     setMessages((prev) => [...prev, { role: "user", text: queryText }]);
     setLoading(true);
@@ -64,8 +81,21 @@ export default function App() {
     if (file) formData.append("file", file);
 
     try {
-      const response = await fetch(API_URL, { method: "POST", body: formData });
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (response.status === 401) {
+        // token expired or invalid — force back to login
+        handleLogout();
+        return;
+      }
       if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+
       const data = await response.json();
       setMessages((prev) => [...prev, { role: "assistant", text: data.answer }]);
     } catch (err) {
@@ -89,6 +119,11 @@ export default function App() {
     }
   }
 
+  // ---- not logged in: show auth screen, nothing else ----
+  if (!token) {
+    return <AuthScreen onAuthenticated={handleAuthenticated} />;
+  }
+
   const hasMessages = messages.length > 0;
 
   return (
@@ -101,12 +136,13 @@ export default function App() {
           <div style={styles.sidebarIcon}>◈</div>
           <div style={styles.sidebarIcon}>⚙</div>
         </div>
-        <div style={styles.sidebarIcon}>⏻</div>
+        <div style={styles.sidebarIcon} onClick={handleLogout} title="Log out">⏻</div>
       </div>
 
       {/* main */}
       <div style={styles.main}>
         <div style={styles.topBar}>
+          <div style={styles.usernamePill}>👤 {username}</div>
           <div style={styles.pill}>+ &nbsp;Attach Document</div>
         </div>
 
@@ -208,8 +244,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: "flex",
     background:
       "radial-gradient(circle at 30% 20%, #fdf2f8 0%, #f5f3ff 35%, #eff6ff 65%, #ecfeff 100%)",
-    fontFamily:
-      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     boxSizing: "border-box",
   },
   sidebar: {
@@ -256,7 +291,15 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: "24px 48px",
     minWidth: 0,
   },
-  topBar: { display: "flex", justifyContent: "flex-end" },
+  topBar: { display: "flex", justifyContent: "space-between", alignItems: "center" },
+  usernamePill: {
+    fontSize: 13,
+    color: "#4b5563",
+    background: "rgba(255,255,255,0.7)",
+    border: "1px solid rgba(0,0,0,0.06)",
+    borderRadius: 999,
+    padding: "8px 16px",
+  },
   pill: {
     fontSize: 13,
     color: "#6b7280",
