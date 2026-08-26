@@ -1,11 +1,12 @@
-from memory_utils import add_message_to_history, get_conversation_history
-from fastapi import FastAPI, UploadFile, Form
+from utils.memory_utils import add_message_to_history, get_conversation_history
+from fastapi import FastAPI, UploadFile, Form,HTTPException, Depends, Header
 from typing import Optional
 import shutil
 import os
 from graph import graph
 from fastapi.middleware.cors import CORSMiddleware
-from db_utils import save_message, init_db
+from utils.db_utils import save_message, init_db
+from utils.auth_utils import create_user, authenticate_user, create_token, decode_token
 
 app = FastAPI()
 
@@ -21,11 +22,20 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 init_db()
 
+def get_current_user(authorization: str = Header(...)) -> str:
+    token = authorization.split(' ')[-1]
+    username = decode_token(token)
+    if username is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    return username
+
 @app.post("/ask-llm")
 def query_endpoint(
     user_query: str = Form(...),
     session_id: str = Form(...),
-    file: Optional[UploadFile] = None
+    file: Optional[UploadFile] = None,
+    username: str = Depends(get_current_user)
 ):
     has_document = file is not None
     document_path = None
@@ -65,3 +75,20 @@ def query_endpoint(
     save_message(session_id, "assistant", result["final_answer"])
     
     return {"answer": result["final_answer"]}
+
+@app.post("/signup")
+def signup(username: str = Form(...), password: str = Form(...)):
+    success = create_user(username, password)
+    if not success:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    token = create_token(username)
+    return {"token": token}
+
+@app.post("/login")
+def login(username: str = Form(...), password: str = Form(...)):
+    valid = authenticate_user(username, password)
+    if not valid:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    token = create_token(username)
+    return {"token": token}
+
