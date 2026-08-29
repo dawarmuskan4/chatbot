@@ -71,8 +71,8 @@ def query_endpoint(
     add_message_to_history(session_id, "assistant", result["final_answer"])
     
     ## saving to db
-    save_message(session_id, "user", user_query)
-    save_message(session_id, "assistant", result["final_answer"])
+    save_message(session_id, "user", user_query, username)
+    save_message(session_id, "assistant", result["final_answer"], username)
     
     return {"answer": result["final_answer"]}
 

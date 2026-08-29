@@ -19,13 +19,24 @@ def init_db():
     
     conn.commit()
     conn.close()
+    add_username_column()
+    
+def add_username_column():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("ALTER TABLE messages ADD COLUMN username TEXT")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already exists — safe to ignore on repeated runs
+    conn.close()
 
-def save_message(session_id: str, role: str, content: str):
+def save_message(session_id: str, role: str, content: str, username: str):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
-        (session_id, role, content)
+        "INSERT INTO messages (session_id, role, content, username) VALUES (?, ?, ?, ?)",
+        (session_id, role, content, username)
     )
     
     conn.commit()
@@ -44,9 +55,36 @@ def get_full_history(session_id: str) -> list[dict]:
     
     history = [{"role": role, "content": content} for role, content in rows]
     return history
+
+# db_utils.py — new function
+
+def get_user_conversations(username: str) -> list[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # you need: distinct session_ids for this username, each with
+    # its earliest message (as a preview) and earliest timestamp.
+    # This is a GROUP BY query — think about what you practiced on
+    # SQLBolt/LeetCode SQL 50: group by session_id, then pick MIN(created_at)
+    # for ordering and something to represent "first message text" per group
+    cursor.execute("""
+        SELECT session_id, MIN(created_at) as started_at, content
+        FROM messages
+        WHERE username = ? AND role = 'user'
+        GROUP BY session_id
+        ORDER BY started_at DESC
+    """, (username,))
+    
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # turn rows into a list of dicts: session_id, started_at, preview
+    conversations = ...
+    return conversations
     
 if __name__ == "__main__":
     init_db()
-    save_message("db_test", "user", "Hello there")
+    save_message("db_test", "user", "Hello there",)
     save_message("db_test", "assistant", "Hi! How can I help?")
     print(get_full_history("db_test"))
+    add_username_column()
