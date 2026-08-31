@@ -62,11 +62,6 @@ def get_user_conversations(username: str) -> list[dict]:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # you need: distinct session_ids for this username, each with
-    # its earliest message (as a preview) and earliest timestamp.
-    # This is a GROUP BY query — think about what you practiced on
-    # SQLBolt/LeetCode SQL 50: group by session_id, then pick MIN(created_at)
-    # for ordering and something to represent "first message text" per group
     cursor.execute("""
         SELECT session_id, MIN(created_at) as started_at, content
         FROM messages
@@ -78,8 +73,7 @@ def get_user_conversations(username: str) -> list[dict]:
     rows = cursor.fetchall()
     conn.close()
     
-    # turn rows into a list of dicts: session_id, started_at, preview
-    conversations = ...
+    conversations = [{"session_id": session_id,"started_at":started_at, "preview": preview} for session_id, started_at, preview in rows]
     return conversations
     
 if __name__ == "__main__":

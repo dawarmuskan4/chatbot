@@ -1,11 +1,12 @@
 from utils.memory_utils import add_message_to_history, get_conversation_history
 from fastapi import FastAPI, UploadFile, Form,HTTPException, Depends, Header
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 import shutil
 import os
 from graph import graph
 from fastapi.middleware.cors import CORSMiddleware
-from utils.db_utils import save_message, init_db
+from utils.db_utils import save_message, init_db, get_full_history, get_user_conversations
 from utils.auth_utils import create_user, authenticate_user, create_token, decode_token
 
 app = FastAPI()
@@ -22,12 +23,14 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 init_db()
 
-def get_current_user(authorization: str = Header(...)) -> str:
-    token = authorization.split(' ')[-1]
+
+security = HTTPBearer()
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    token = credentials.credentials
     username = decode_token(token)
     if username is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
     return username
 
 @app.post("/ask-llm")
@@ -92,3 +95,10 @@ def login(username: str = Form(...), password: str = Form(...)):
     token = create_token(username)
     return {"token": token}
 
+@app.get("/conversations")
+def list_conversations(username: str = Depends(get_current_user)):
+    return get_user_conversations(username)
+
+@app.get("/conversations/{session_id}/messages")
+def get_conversation_messages(session_id: str, username: str = Depends(get_current_user)):
+    return get_full_history(session_id)
