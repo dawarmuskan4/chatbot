@@ -75,6 +75,17 @@ def get_user_conversations(username: str) -> list[dict]:
     
     conversations = [{"session_id": session_id,"started_at":started_at, "preview": preview} for session_id, started_at, preview in rows]
     return conversations
+
+def session_belongs_to_user(session_id: str, username: str) -> bool:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT 1 FROM messages WHERE session_id = ? AND username = ? LIMIT 1",
+        (session_id, username)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row is not None
     
 if __name__ == "__main__":
     init_db()

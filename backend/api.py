@@ -7,7 +7,7 @@ import shutil
 import os
 from graph import graph
 from fastapi.middleware.cors import CORSMiddleware
-from utils.db_utils import save_message, init_db, get_full_history, get_user_conversations
+from utils.db_utils import save_message, init_db, get_full_history, get_user_conversations, session_belongs_to_user
 from utils.auth_utils import (
     create_user_with_verification, authenticate_user, create_token,
     verify_code, is_verified
@@ -117,4 +117,6 @@ def list_conversations(username: str = Depends(get_current_user)):
 
 @app.get("/conversations/{session_id}/messages")
 def get_conversation_messages(session_id: str, username: str = Depends(get_current_user)):
+    if not session_belongs_to_user(session_id, username):
+        raise HTTPException(status_code=403, detail="Not your conversation")
     return get_full_history(session_id)
