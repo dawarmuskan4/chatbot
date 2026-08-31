@@ -1,3 +1,4 @@
+from utils.auth_utils import resend_verification_code
 from utils.auth_utils import decode_token
 from utils.memory_utils import add_message_to_history, get_conversation_history, set_active_document, get_active_document
 from fastapi import FastAPI, UploadFile, Form,HTTPException, Depends, Header
@@ -100,6 +101,13 @@ def verify(username: str = Form(...), code: str = Form(...)):
         raise HTTPException(status_code=400, detail="Invalid or expired code")
     token = create_token(username)
     return {"token": token}
+
+@app.post("/resend-code")
+def resend_code(username: str = Form(...)):
+    success = resend_verification_code(username)
+    if not success:
+        raise HTTPException(status_code=400, detail="Unable to resend code")
+    return {"message": "New code sent"} 
 
 @app.post("/login")
 def login(username: str = Form(...), password: str = Form(...)):
