@@ -158,6 +158,30 @@ def is_verified(username: str) -> bool:
     conn.close()
     return row is not None and row[0] == 1
 
+# auth_utils.py — new function
+
+def resend_verification_code(username: str) -> bool:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT verified FROM users WHERE username = ?", (username,))
+    row = cursor.fetchone()
+    
+    if row is None or row[0] == 1:
+        conn.close()
+        return False  # no such user, or already verified — nothing to resend
+    
+    code = generate_verification_code()
+    expires_at = datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=15)
+    cursor.execute(
+        "UPDATE users SET verification_code = ?, code_expires_at = ? WHERE username = ?",
+        (code, expires_at, username)
+    )
+    conn.commit()
+    conn.close()
+    
+    send_verification_email(username, code)
+    return True
+
 if __name__ == "__main__":
     init_users_table()
     print(create_user_with_verification("dawarmuskan4@gmail.com", "testpass123"))
