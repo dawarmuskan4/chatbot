@@ -1,8 +1,4 @@
 // src/auth.ts
-// Small helper module: talks to /signup and /login, and manages the token
-// in sessionStorage (cleared when the tab closes — swap for localStorage
-// if you want login to persist across browser restarts).
-
 const API_BASE = "http://localhost:8000";
 const TOKEN_KEY = "chat_auth_token";
 const USERNAME_KEY = "chat_username";
@@ -25,20 +21,6 @@ export function clearSession() {
   sessionStorage.removeItem(USERNAME_KEY);
 }
 
-export async function signup(username: string, password: string): Promise<string> {
-  const formData = new FormData();
-  formData.append("username", username);
-  formData.append("password", password);
-
-  const res = await fetch(`${API_BASE}/signup`, { method: "POST", body: formData });
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new Error(data.detail ?? "Signup failed");
-  }
-  return data.token;
-}
-
 export async function login(username: string, password: string): Promise<string> {
   const formData = new FormData();
   formData.append("username", username);
@@ -49,6 +31,35 @@ export async function login(username: string, password: string): Promise<string>
 
   if (!res.ok) {
     throw new Error(data.detail ?? "Login failed");
+  }
+  return data.token;
+}
+
+// signup no longer returns a token directly — it triggers an email with a
+// verification code, and the caller must then call verifyCode() to finish.
+export async function signup(username: string, password: string): Promise<void> {
+  const formData = new FormData();
+  formData.append("username", username);
+  formData.append("password", password);
+
+  const res = await fetch(`${API_BASE}/signup`, { method: "POST", body: formData });
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.detail ?? "Signup failed");
+  }
+}
+
+export async function verifyCode(username: string, code: string): Promise<string> {
+  const formData = new FormData();
+  formData.append("username", username);
+  formData.append("code", code);
+
+  const res = await fetch(`${API_BASE}/verify`, { method: "POST", body: formData });
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.detail ?? "Verification failed");
   }
   return data.token;
 }
