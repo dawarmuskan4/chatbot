@@ -35,8 +35,6 @@ export async function login(username: string, password: string): Promise<string>
   return data.token;
 }
 
-// signup no longer returns a token directly — it triggers an email with a
-// verification code, and the caller must then call verifyCode() to finish.
 export async function signup(username: string, password: string): Promise<void> {
   const formData = new FormData();
   formData.append("username", username);
@@ -62,4 +60,16 @@ export async function verifyCode(username: string, code: string): Promise<string
     throw new Error(data.detail ?? "Verification failed");
   }
   return data.token;
+}
+
+export async function resendCode(username: string): Promise<void> {
+  const formData = new FormData();
+  formData.append("username", username);
+
+  const res = await fetch(`${API_BASE}/resend-code`, { method: "POST", body: formData });
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.detail ?? "Could not resend code");
+  }
 }

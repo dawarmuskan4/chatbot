@@ -1,6 +1,6 @@
 // src/AuthScreen.tsx
 import { useState } from "react";
-import { login, signup, verifyCode } from "./auth";
+import { login, signup, verifyCode, resendCode } from "./auth";
 
 interface AuthScreenProps {
   onAuthenticated: (token: string, username: string) => void;
@@ -16,6 +16,8 @@ export default function AuthScreen({ onAuthenticated }: AuthScreenProps) {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   async function handleLoginOrSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -31,6 +33,7 @@ export default function AuthScreen({ onAuthenticated }: AuthScreenProps) {
         await signup(username, password);
         setInfo(`We sent a verification code to ${username}. Enter it below.`);
         setMode("verify");
+        startResendCooldown();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -51,6 +54,36 @@ export default function AuthScreen({ onAuthenticated }: AuthScreenProps) {
       setError(err instanceof Error ? err.message : "Verification failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function startResendCooldown() {
+    setResendCooldown(30);
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  async function handleResend() {
+    if (resendCooldown > 0 || resending) return;
+    setError("");
+    setResending(true);
+
+    try {
+      await resendCode(username);
+      setInfo(`A new code was sent to ${username}.`);
+      setCode("");
+      startResendCooldown();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not resend code");
+    } finally {
+      setResending(false);
     }
   }
 
@@ -130,7 +163,24 @@ export default function AuthScreen({ onAuthenticated }: AuthScreenProps) {
             </button>
 
             <div style={styles.switchRow}>
-              Entered the wrong email?{" "}
+              Didn't get it?{" "}
+              <span
+                style={{
+                  ...styles.switchLink,
+                  ...(resendCooldown > 0 || resending ? styles.switchLinkDisabled : {}),
+                }}
+                onClick={handleResend}
+              >
+                {resending
+                  ? "Sending..."
+                  : resendCooldown > 0
+                    ? `Resend in ${resendCooldown}s`
+                    : "Resend code"}
+              </span>
+            </div>
+
+            <div style={styles.switchRow}>
+              Wrong email?{" "}
               <span style={styles.switchLink} onClick={() => switchMode("signup")}>
                 Go back
               </span>
@@ -222,4 +272,5 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   switchRow: { fontSize: 13, color: "#6b7280" },
   switchLink: { color: "#7c3aed", fontWeight: 600, cursor: "pointer" },
+  switchLinkDisabled: { color: "#c4b5fd", cursor: "default" },
 };
