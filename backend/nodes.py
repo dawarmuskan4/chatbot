@@ -26,11 +26,14 @@ def classify_intent_node(state: GraphState) -> dict:
 
 def generate_pandas_code_node(state:GraphState) -> dict:
     system_prompt = """
-    You are a pandas code generator. Given a user query and sample data from a DataFrame called `df`,
-    write ONE line (or a few lines) of pandas code that answers the query.
-    
+    You are a pandas code generator. Given a user query and sample data from one or more
+    sheets in an Excel file, write ONE line (or a few lines) of pandas code that answers the query.
+
     Rules:
-    - Assume the DataFrame is already loaded as `df` — do not include import statements or df creation
+    - The data is provided as a dict called `sheets`, where each key is a sheet name and each
+      value is a DataFrame for that sheet (e.g. sheets["Sheet1"])
+    - Reference the correct sheet by name based on the schema/sample data provided
+    - Do not include import statements or any sheet-loading code
     - Store the final answer in a variable called `result`
     - Output ONLY the code, no explanation, no markdown code fences, no commentary
     """
@@ -55,12 +58,12 @@ def generate_pandas_code_node(state:GraphState) -> dict:
 def validate_code_node(state:GraphState) -> dict:
     system_prompt = """
     You are a code safety and correctness reviewer. You will be given pandas code and 
-    sample data context. Check that:
-    - The code only uses pandas operations on a DataFrame called `df`
+    sample data context from one or more Excel sheets. Check that:
+    - The code only uses pandas operations on the `sheets` dict (accessing DataFrames via sheets["SheetName"])
     - It does not use file I/O, os, sys, subprocess, network calls, or exec/eval
-    - It references column names that actually exist in the schema
+    - It references sheet names and column names that actually exist in the schema
     - It assigns a final answer to a variable called `result`
-    
+
     Respond in EXACTLY this format, nothing else:
     "valid" if the code passes all checks
     "invalid: <short reason>" if it fails any check
@@ -83,7 +86,7 @@ def route_after_validation_node(state: GraphState) -> str:
         return "fail"
     
 def execute_code_node(state: GraphState) -> dict:
-    namespace = {"df": state["df"], "pd": pd}
+    namespace = {"sheets": state["df"], "pd": pd}
     exec(state['code'], namespace)
     output = namespace["result"]
     return {"execution_result": output}
@@ -133,16 +136,20 @@ def load_text_document_node(state: GraphState) -> dict:
     return {"schema_context": text}
 
 def load_document_node(state: GraphState) -> dict:
-    df = pd.read_excel(state["document_path"])
+    sheets = pd.read_excel(state["document_path"], sheet_name=None)
     
-    sample_rows = df.head().to_string()
-    schema_context = f"""
-    Sample data from the document:
-    {sample_rows}
-    """
+    schema_parts = []
+    for sheet_name, df in sheets.items():
+        sample = find_sample_rows(df)
+        if sample is not None:
+            schema_parts.append(f"Sheet: {sheet_name}\n{sample.to_string()}")
+        else:
+            schema_parts.append(f"Sheet: {sheet_name}\n(No data found in first {50} rows)")
+    
+    schema_context = "\n\n".join(schema_parts)
     
     return {
-        "df": df,
+        "df": sheets,
         "schema_context": schema_context
     }
 
@@ -165,3 +172,18 @@ def text_qa_node(state: GraphState) -> dict:
     answer = ask_llm(user_content, system_prompt)
     
     return {"final_answer": answer}
+
+def find_sample_rows(df, chunk_size: int = 5, max_rows: int = 50):
+    for start in range(0, max_rows, chunk_size):
+        chunk = df.iloc[start:start + chunk_size]
+        
+        # a chunk might be all-NaN (empty rows) — need to check if it's
+        # genuinely empty before deciding to move to the next chunk.
+        # pandas DataFrames have a method for dropping rows that are
+        # entirely NaN — look up .dropna() and its "how" parameter
+        non_empty = chunk.dropna(how="all")
+        
+        if not non_empty.empty:
+            return chunk
+    
+    return None  # scanned up to max_rows, found nothing
