@@ -19,6 +19,7 @@ dependencies = [
     "python-dotenv>=1.2.3",
     "python-multipart>=0.0.32",
     "redis>=8.1.0",
+    "resend>=2.42.0",
     "sentence-transformers>=6.0.0",
     "uvicorn[standard]>=0.52.4",
 ]

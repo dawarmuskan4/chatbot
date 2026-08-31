@@ -1,6 +1,5 @@
-from utils.memory_utils import get_active_document
-from utils.memory_utils import set_active_document
-from utils.memory_utils import add_message_to_history, get_conversation_history
+from utils.auth_utils import decode_token
+from utils.memory_utils import add_message_to_history, get_conversation_history, set_active_document, get_active_document
 from fastapi import FastAPI, UploadFile, Form,HTTPException, Depends, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
@@ -9,8 +8,10 @@ import os
 from graph import graph
 from fastapi.middleware.cors import CORSMiddleware
 from utils.db_utils import save_message, init_db, get_full_history, get_user_conversations
-from utils.auth_utils import create_user, authenticate_user, create_token, decode_token
-
+from utils.auth_utils import (
+    create_user_with_verification, authenticate_user, create_token,
+    verify_code, is_verified
+)
 app = FastAPI()
 
 app.add_middleware(
@@ -87,9 +88,16 @@ def query_endpoint(
 
 @app.post("/signup")
 def signup(username: str = Form(...), password: str = Form(...)):
-    success = create_user(username, password)
+    success = create_user_with_verification(username, password)
     if not success:
         raise HTTPException(status_code=400, detail="Username already taken")
+    return {"message": "Verification code sent to your email"}
+
+@app.post("/verify")
+def verify(username: str = Form(...), code: str = Form(...)):
+    success = verify_code(username, code)
+    if not success:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
     token = create_token(username)
     return {"token": token}
 
@@ -98,6 +106,8 @@ def login(username: str = Form(...), password: str = Form(...)):
     valid = authenticate_user(username, password)
     if not valid:
         raise HTTPException(status_code=401, detail="Invalid username or password")
+    if not is_verified(username):
+        raise HTTPException(status_code=403, detail="Please verify your email before logging in")
     token = create_token(username)
     return {"token": token}
 
