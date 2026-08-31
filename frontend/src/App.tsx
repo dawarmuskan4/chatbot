@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import AuthScreen from "./AuthScreen";
-import { clearSession, getToken, getUsername, setSession } from "./auth";
+import { getToken, getUsername, setSession, clearSession } from "./auth";
+import { fetchConversations, fetchConversationMessages, type ConversationSummary } from "./api";
 
 interface Message {
   role: "user" | "assistant";
@@ -16,12 +17,16 @@ const SUGGESTIONS = [
   { label: "Explain This", icon: "✦" },
 ];
 
-function getOrCreateSessionId(): string {
-  const existing = sessionStorage.getItem("chat_session_id");
-  if (existing) return existing;
-  const newId = crypto.randomUUID();
-  sessionStorage.setItem("chat_session_id", newId);
-  return newId;
+function newSessionId(): string {
+  return crypto.randomUUID();
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso.replace(" ", "T"));
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 export default function App() {
@@ -32,9 +37,14 @@ export default function App() {
   const [input, setInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string>(newSessionId());
+
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const sessionIdRef = useRef<string>(getOrCreateSessionId());
 
   useEffect(() => {
     const style = document.createElement("style");
@@ -55,6 +65,22 @@ export default function App() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
+  // load the conversation list once logged in
+  useEffect(() => {
+    if (!token) return;
+    refreshConversationList();
+  }, [token]);
+
+  async function refreshConversationList() {
+    if (!token) return;
+    try {
+      const list = await fetchConversations(token);
+      setConversations(list);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   function handleAuthenticated(newToken: string, newUsername: string) {
     setSession(newToken, newUsername);
     setToken(newToken);
@@ -66,31 +92,51 @@ export default function App() {
     setToken(null);
     setUsername(null);
     setMessages([]);
+    setConversations([]);
+  }
+
+  function startNewChat() {
+    setSessionId(newSessionId());
+    setMessages([]);
+    setFile(null);
+    setInput("");
+  }
+
+  async function openConversation(convSessionId: string) {
+    if (!token || historyLoading) return;
+    setHistoryLoading(true);
+    try {
+      const stored = await fetchConversationMessages(token, convSessionId);
+      setMessages(stored.map((m) => ({ role: m.role, text: m.content })));
+      setSessionId(convSessionId);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setHistoryLoading(false);
+    }
   }
 
   async function sendQuery(overrideText?: string) {
     const queryText = overrideText ?? input;
     if (!queryText.trim() || loading || !token) return;
 
+    const isFirstMessage = messages.length === 0;
     setMessages((prev) => [...prev, { role: "user", text: queryText }]);
     setLoading(true);
 
     const formData = new FormData();
     formData.append("user_query", queryText);
-    formData.append("session_id", sessionIdRef.current);
+    formData.append("session_id", sessionId);
     if (file) formData.append("file", file);
 
     try {
       const response = await fetch(API_URL, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
 
       if (response.status === 401) {
-        // token expired or invalid — force back to login
         handleLogout();
         return;
       }
@@ -98,6 +144,9 @@ export default function App() {
 
       const data = await response.json();
       setMessages((prev) => [...prev, { role: "assistant", text: data.answer }]);
+
+      // a brand-new conversation just got its first turn — refresh the sidebar list
+      if (isFirstMessage) refreshConversationList();
     } catch (err) {
       console.error(err);
       setMessages((prev) => [
@@ -119,7 +168,6 @@ export default function App() {
     }
   }
 
-  // ---- not logged in: show auth screen, nothing else ----
   if (!token) {
     return <AuthScreen onAuthenticated={handleAuthenticated} />;
   }
@@ -128,16 +176,50 @@ export default function App() {
 
   return (
     <div style={styles.page}>
-      {/* sidebar */}
-      <div style={styles.sidebar}>
+      {/* icon rail */}
+      <div style={styles.iconRail}>
         <div style={styles.logo}>Q</div>
-        <div style={styles.sidebarIcons}>
-          <div style={{ ...styles.sidebarIcon, ...styles.sidebarIconActive }}>✦</div>
-          <div style={styles.sidebarIcon}>◈</div>
-          <div style={styles.sidebarIcon}>⚙</div>
+        <div style={styles.railIcons}>
+          <div
+            style={{ ...styles.railIcon, ...(sidebarOpen ? styles.railIconActive : {}) }}
+            onClick={() => setSidebarOpen((v) => !v)}
+            title="Chat history"
+          >
+            💬
+          </div>
+          <div style={styles.railIcon} onClick={startNewChat} title="New chat">✦</div>
+          <div style={styles.railIcon}>⚙</div>
         </div>
-        <div style={styles.sidebarIcon} onClick={handleLogout} title="Log out">⏻</div>
+        <div style={styles.railIcon} onClick={handleLogout} title="Log out">⏻</div>
       </div>
+
+      {/* history sidebar */}
+      {sidebarOpen && (
+        <div style={styles.historySidebar}>
+          <div style={styles.historyHeader}>
+            <span style={styles.historyTitle}>Your Chats</span>
+            <button style={styles.newChatButton} onClick={startNewChat}>+ New</button>
+          </div>
+          <div style={styles.historyList}>
+            {conversations.length === 0 && (
+              <div style={styles.historyEmpty}>No conversations yet</div>
+            )}
+            {conversations.map((c) => (
+              <div
+                key={c.session_id}
+                style={{
+                  ...styles.historyItem,
+                  ...(c.session_id === sessionId ? styles.historyItemActive : {}),
+                }}
+                onClick={() => openConversation(c.session_id)}
+              >
+                <div style={styles.historyPreview}>{c.preview || "New conversation"}</div>
+                <div style={styles.historyDate}>{formatDate(c.started_at)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* main */}
       <div style={styles.main}>
@@ -146,7 +228,11 @@ export default function App() {
           <div style={styles.pill}>+ &nbsp;Attach Document</div>
         </div>
 
-        {!hasMessages ? (
+        {historyLoading ? (
+          <div style={styles.hero}>
+            <div style={styles.thinkingDots}>Loading conversation...</div>
+          </div>
+        ) : !hasMessages ? (
           <div style={styles.hero}>
             <h1 style={styles.heroTitle}>
               <span style={styles.heroTitleMuted}>Ask Anything, </span>
@@ -247,7 +333,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     boxSizing: "border-box",
   },
-  sidebar: {
+  iconRail: {
     width: 76,
     display: "flex",
     flexDirection: "column",
@@ -255,6 +341,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     justifyContent: "space-between",
     padding: "24px 0",
     borderRight: "1px solid rgba(0,0,0,0.05)",
+    flexShrink: 0,
   },
   logo: {
     width: 36,
@@ -268,8 +355,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: 700,
     fontSize: 16,
   },
-  sidebarIcons: { display: "flex", flexDirection: "column", gap: 20 },
-  sidebarIcon: {
+  railIcons: { display: "flex", flexDirection: "column", gap: 20 },
+  railIcon: {
     width: 40,
     height: 40,
     borderRadius: 12,
@@ -277,13 +364,57 @@ const styles: { [key: string]: React.CSSProperties } = {
     alignItems: "center",
     justifyContent: "center",
     color: "#9ca3af",
-    fontSize: 16,
+    fontSize: 15,
     cursor: "pointer",
   },
-  sidebarIconActive: {
+  railIconActive: {
     background: "linear-gradient(135deg, rgba(240,171,252,0.25), rgba(165,180,252,0.25))",
     color: "#7c3aed",
   },
+  historySidebar: {
+    width: 260,
+    flexShrink: 0,
+    borderRight: "1px solid rgba(0,0,0,0.05)",
+    display: "flex",
+    flexDirection: "column",
+    background: "rgba(255,255,255,0.4)",
+  },
+  historyHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "20px 16px 12px",
+  },
+  historyTitle: { fontSize: 13, fontWeight: 700, color: "#6b7280", letterSpacing: 0.3 },
+  newChatButton: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#7c3aed",
+    background: "rgba(124,58,237,0.08)",
+    border: "none",
+    borderRadius: 999,
+    padding: "5px 12px",
+    cursor: "pointer",
+  },
+  historyList: { flex: 1, overflowY: "auto", padding: "0 10px 10px" },
+  historyEmpty: { fontSize: 13, color: "#9ca3af", padding: "16px 10px", textAlign: "center" },
+  historyItem: {
+    padding: "10px 12px",
+    borderRadius: 12,
+    cursor: "pointer",
+    marginBottom: 4,
+  },
+  historyItemActive: {
+    background: "rgba(165,180,252,0.18)",
+  },
+  historyPreview: {
+    fontSize: 13,
+    color: "#374151",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  historyDate: { fontSize: 11, color: "#9ca3af", marginTop: 2 },
   main: {
     flex: 1,
     display: "flex",
