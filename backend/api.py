@@ -1,3 +1,5 @@
+from utils.memory_utils import get_active_document
+from utils.memory_utils import set_active_document
 from utils.memory_utils import add_message_to_history, get_conversation_history
 from fastapi import FastAPI, UploadFile, Form,HTTPException, Depends, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -47,6 +49,10 @@ def query_endpoint(
         document_path = os.path.join(UPLOAD_DIR, file.filename)
         with open(document_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
+        set_active_document(session_id, document_path)
+    else:
+        document_path = get_active_document(session_id)
+        has_document = document_path is not None
     
     history = get_conversation_history(session_id)
     

@@ -23,3 +23,11 @@ def get_conversation_history(session_id: str) -> list[dict]:
         return []
     history = json.loads(raw)
     return history
+
+def set_active_document(session_id: str, document_path: str):
+    key = f"active_document:{session_id}"
+    r.set(key, document_path, ex=EXPIRY_SECONDS)
+
+def get_active_document(session_id: str) -> str | None:
+    key = f"active_document:{session_id}"
+    return r.get(key)
