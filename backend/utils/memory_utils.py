@@ -1,8 +1,13 @@
 # memory_utils.py
 import redis
 import json
+import os
 
-r = redis.Redis(host="localhost", port=6379, decode_responses=True)
+r = redis.Redis(
+    host=os.environ.get("REDIS_HOST", "localhost"),
+    port=int(os.environ.get("REDIS_PORT", 6379)),
+    decode_responses=True
+)
 
 MAX_TURNS = 12       # 6 exchanges = 12 messages (user+assistant pairs)
 EXPIRY_SECONDS = 3600  # 1 hour
