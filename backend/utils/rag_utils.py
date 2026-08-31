@@ -25,6 +25,8 @@ client = chromadb.Client()
 collection = client.get_or_create_collection("documents")
 
 def store_chunks(chunks: list[str], embeddings, doc_id: str):
+    collection.delete(where={"doc_id": doc_id})
+    
     ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
     metadatas = [{"doc_id": doc_id} for _ in chunks]
     collection.add(
