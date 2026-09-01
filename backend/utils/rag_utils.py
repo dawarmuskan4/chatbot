@@ -1,4 +1,3 @@
-from groq import __name
 from sentence_transformers import SentenceTransformer
 import chromadb
 
@@ -14,9 +13,16 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]
     return chunks
 
 ## Embedding 
-model = SentenceTransformer("all-MiniLM-L6-v2")
+_model = None
+
+def get_model():
+    global _model
+    if _model is None:
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
 
 def embed_chunks(chunks: list[str]):
+    model = get_model()
     embeddings = model.encode(chunks, show_progress_bar=True)
     return embeddings
 
